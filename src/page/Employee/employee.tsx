@@ -5,7 +5,7 @@ import { Button } from "antd";
 import { Edit2Icon, Plus, Trash2Icon } from "lucide-react";
 import { FormModal } from "../../components/FormModal";
 import { ConfirmModal } from "../../components/ConfirmModal";
-import { TableComponent } from "../../components/TableComponent";
+import { TableComponent } from "../../components/TableComponent/TableComponent";
 
 export default function EmployeeManager() {
   const [employees, setEmployees] = useState<IEmployee[]>([]);
@@ -119,15 +119,18 @@ export default function EmployeeManager() {
       title: "Full Name",
       dataIndex: "full_name",
       key: "full_name",
-      editable: true, // Cho phép chỉnh sửa
-      inputType: "text",
+      editable: true,
+      inputType: "text", // TypeScript sẽ hiểu đây là literal type nhờ khai báo IColumn[] ở trên
+      width: 200,
+      fixed: "left",
     },
     {
       title: "Position",
       dataIndex: "position",
       key: "position",
       editable: true,
-      inputType: "select", // Dùng select cho position
+      inputType: "select",
+      width: 150,
       options: [
         { label: "BE", value: "BE" },
         { label: "WEB", value: "WEB" },
@@ -141,6 +144,7 @@ export default function EmployeeManager() {
       key: "department",
       editable: true,
       inputType: "text",
+      width: 150,
     },
     {
       title: "Status",
@@ -148,6 +152,7 @@ export default function EmployeeManager() {
       key: "status",
       editable: true,
       inputType: "select",
+      width: 150,
       options: [
         { label: "Waiting", value: "waiting" },
         { label: "Pending", value: "pending" },
@@ -192,8 +197,8 @@ export default function EmployeeManager() {
       <TableComponent
         data={employees}
         columns={columns}
-        onSave={handleSaveInline} // Truyền callback để lưu
-        onDelete={handleDelete} // Truyền callback để xóa
+        onSave={handleSaveInline}
+        onDelete={handleDelete}
       />
 
       {isModalOpen && (

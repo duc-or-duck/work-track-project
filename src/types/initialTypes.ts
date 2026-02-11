@@ -11,50 +11,49 @@ export interface IEmployee {
   status?: string | null; 
 }
 
-export interface Column {
+export interface IColumn {
+ title: string;
+  dataIndex: string;
   key: string;
-  label: string;
-  type?: "text" | "number" | "select" | "textarea";
-  options?: { label: string; value: string | number }[];
-  required?: boolean;
-  disabled?: boolean;
+  editable?: boolean;
+  inputType?: string | "text" | "number" | "select" | "date" | null | undefined;
+  options?: Array<{ label: string; value: string | number }>;
+  width?: number;
+  fixed?: "left" | "right"  | undefined ;
+  render?: (text: any, record: any, index: number) => React.ReactNode;
+  [key: string]: any;
 }
 
+export interface TableComponentProps {
+  data: any[];
+  columns: IColumn[];
+  onSave?: (record: any) => Promise<boolean>;
+  onDelete?: (record: any) => void;
+  loading?: boolean;
+  expandable?: any; // ✅ Thêm prop expandable
+}
 
+export interface EditableCellProps extends React.HTMLAttributes<HTMLElement> {
+  editing: boolean;
+  dataIndex: string;
+  title: string;
+  inputType?: "number" | "text" | "select" | "date";
+  options?: { label: string; value: string | number }[];
+  record: any;
+  index: number;
+  children: React.ReactNode;
+  onSave: (record: any) => void;
+  onCancel: () => void;
+}
 export interface FormPopupProps {
   content?: string | null;
   open?: boolean;
   title?: string;
-  columns: Column[];
+  columns: IColumn[] | [];
   initialValues?: any;
-  onSubmit: (values: any) => void;
-  onCancel: () => void;
+  onSubmit?: (values: any) => void;
+  onCancel?: () => void;
   loading?: boolean;
-}
-
-export interface APITask {
-  task: {
-    id: string;
-    project_id: string;
-    name?: string;
-    description?: string | null;
-    priority?: number;
-    status?: string;
-    percent_complete?: number;
-    start_date?: string | null;
-    expected_end_date?: string;
-    actual_end_date?: string | null;
-    created_date?: string;
-  };
-  members: Array<{
-    project_id: string;
-    employee_id: string;
-    full_name?: string;
-    role?: string;
-    joined_date: string;
-    left_date?: string | null;
-    is_active?: boolean;
-  }>;
 }
 
 export interface IProject {
@@ -64,96 +63,65 @@ export interface IProject {
   start_date?: string| null;
   end_date?: string| null| undefined;   
   status?: number | string| null;
-  priority?: number;   
-  is_active?: number; 
-  task?: ITask[];
+  priority?: number | undefined;   
+  is_active?: number | undefined; 
+  tasks?: ITask[] | any[];
   duration_days?: string| null;
+  project_member?: IProjectMember[] | null;
+  project_module ?: IModule[] | null;
 }
 
 export interface ITask {
   id: string;
-  project_id: string;
-  name: string;
-  description: string;
-  priority: number;        
-  status: string;         
-  percent_complete: number;
+  project_id?: string | null;
+  name?: string | null;
+  description?: string | null;
+  priority?: number | null;        
+  status?: string | null;         
+  percent_complete?: number;
   start_date?: string | null;         
-  expected_end_date: string;  
-  actual_end_date: string | null;
-  is_active: boolean;
-  is_deleted: boolean;
-}
-export interface Project {
-  id: string;
-  name?: string;
-  status?: ProjectStatus;
-  startDate?: string;
-  endDate?: string;
-  progress?: number;
-  color?: string;
-  tasks?: ITask[];
-  totalTasks?: number;
-  inProgressTasks?: number;
-  unassignedTasks?: number;
-  overdueTasks?: number;
-  completedTasks?: number;
-  completionRate?: number;
-  assignedMembers?: string[];
-  unimplementedDays?: number;
-  totalDays?: number;
-}
-
-0
-export interface ProjectData {
-  id: string;
+  expected_end_date?: string | null;  
+  actual_end_date?: string | null;
   is_active?: boolean;
   is_deleted?: boolean;
-  name?: string;
-  description?: string;
-  start_date?: string | null;
-  end_date?: string;
-  status?: string;
-  priority?: number;
+  module?: IModule[] | [] | undefined;
+  task_member?: ITaskMember[] | [];
 }
 
 export interface ITaskMember {
-  project_id: string;
-  employee_id: string;
-  full_name: string;
-  role: string;
-  joined_date: string;
-}
-
-export interface TaskData {
   id: string;
-  is_active?: boolean;
-  is_deleted?: boolean;
-  project_id?: string;
-  name?: string;
-  description?: string;
+  task_id?: string | null;
+  employee_id?: string | null;
+  full_name?: string | null;
+  position?: IPosition[] | [];
+  assigned_date?: string | null;
+}
+export interface IPosition {
+  id: string;
+  project_id?: string | null;
+  name?: string | null;
+  description?: string | null;
+  status?: string | null;
+  created_at?: string | null;
+  is_active?: boolean | undefined;
+}
+
+export interface IProjectMember {
+  project_id: string;
+  employee_id?: string | null;
+  full_name?: string | null;
+  joined_date?: string | null;
+  left_date?: string | null;
+  role?: string | null;
+}
+
+export interface IModule {
+  id: string | null;
+  project_id?: string | null;
+  name?: string | null;
+  description?: string | null;
+  status?: string | null;
   priority?: number;
-  status?: string;
-  percent_complete?: number;
-  start_date?: string | null;
-  expected_end_date?: string;
-  actual_end_date?: string | null;
-}
-
-export interface ITaskWithMembers {
-  task: ITask;
-  members: ITaskMember[];
-}
-
-export interface IProjectDetailResponse {
-  project: IProject;
-  tasks: ITaskWithMembers[];
-}
-
-export interface IApiResponse {
-  succeeded: boolean;
-  message: string;
-  errors: null | string[];
-  data: IProjectDetailResponse[];
-  pagination: null;
+  created_at?: string | null;
+  is_active?: boolean | undefined;
 }

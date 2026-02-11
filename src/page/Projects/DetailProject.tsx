@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
-import type { IApiResponse } from "../../types/initialTypes";
 import apiService from "../../Services/ApiService";
 import {
   Card,
@@ -8,142 +7,71 @@ import {
   Tag,
   Typography,
   Spin,
-  Row,
-  Col,
   Empty,
   message,
-  Button,
-  Progress,
+  Divider,
 } from "antd";
-import {
-  CalendarOutlined,
-  CheckCircleOutlined,
-  ClockCircleOutlined,
-  FlagOutlined,
-  TeamOutlined,
-  FileTextOutlined,
-  UserOutlined,
-  PlusOutlined,
-} from "@ant-design/icons";
+import { UserOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import {
   getPriorityColor,
   getRoleColor,
   getStatusColor,
 } from "../../Helper/Helpers";
-import { TableComponent } from "../../components/TableComponent";
+import { TableComponent } from "../../components/TableComponent/TableComponent";
+import type { IProject, ITask, IProjectMember } from "../../types/initialTypes";
 
 const { Title, Text } = Typography;
 
-// Types cho dữ liệu
 interface IEmployee {
   id: string;
-  full_name: string;
+  name?: string;
+  full_name?: string;
+  email?: string;
+  phone?: string;
   position?: string;
-}
-
-interface ITaskMember {
-  id: string;
-  task_id: string;
-  employee_id: string;
-  full_name: string;
-  position: string;
-  assigned_date: string;
-}
-
-interface ITask {
-  id: string;
-  project_id: string;
-  name: string;
-  description: string | null;
-  priority: number;
-  status: string;
-  percent_complete: number;
-  start_date: string;
-  expected_end_date: string;
-  actual_end_date: string | null;
-  employee_end_date: string | null;
-  created_at: string;
-  task_member: ITaskMember[];
-}
-
-interface IProjectMember {
-  id?: string;
-  project_id: string;
-  employee_id: string;
-  joined_date: string;
-  left_date: string;
-  role: string;
-}
-
-interface IProjectDetail {
-  id: string;
-  name: string;
-  description: string;
-  start_date: string;
-  end_date: string;
-  status: string;
-  priority: number;
-  tasks: ITask[];
-  project_member: IProjectMember[];
-}
-
-interface ProjectInfoDataItem {
-  key: string;
-  label: string;
-  value: string | number | React.ReactNode;
-  icon: React.ReactNode;
+  department?: string;
+  [key: string]: any;
 }
 
 export const ProjectDetail = () => {
-  const [prjDetail, setPrjDetail] = useState<IProjectDetail | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [prjDetail, setPrjDetail] = useState<IProject | null>(null);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [expandedRowKeys, setExpandedRowKeys] = useState<string[]>([]);
-  const [showProjectMembers, setShowProjectMembers] = useState<boolean>(false);
   const [employees, setEmployees] = useState<IEmployee[]>([]);
+  const [loadingEmployees, setLoadingEmployees] = useState(false);
   const { id } = useParams<{ id: string }>();
 
   const fetchEmployees = async (): Promise<void> => {
+    setLoadingEmployees(true);
     try {
-      const response: IApiResponse = await apiService.get("/Employee");
+      const response = await apiService.get("/Employee");
       if (response?.succeeded && response.data) {
         setEmployees(response.data);
       }
     } catch (err) {
       console.error("Error fetching employees:", err);
+    } finally {
+      setLoadingEmployees(false);
     }
   };
 
-  const fetchProjectById = async (): Promise<void> => {
+  const fetchProjectById = async () => {
+    setLoading(true);
     try {
-      setLoading(true);
-      setError(null);
-
-      const response: IApiResponse = await apiService.get("/Project/detail/", {
+      const response = await apiService.get("/Project/detail/", {
         params: {
           Id: id,
         },
       });
-
-      if (response?.succeeded && response.data && response.data.length > 0) {
-        const projectData: IProjectDetail = response.data[0];
-        // Thêm id cho project members (sử dụng employee_id làm id)
-        if (projectData.project_member) {
-          projectData.project_member = projectData.project_member.map(
-            (member) => ({
-              ...member,
-              id: member.employee_id,
-            }),
-          );
-        }
+      if (response?.succeeded) {
+        const projectData: IProject = response.data[0];
         setPrjDetail(projectData);
-      } else {
-        setError("Failed to fetch project details");
       }
+      console.log(response.data[0]);
     } catch (err) {
-      setError("An error occurred while fetching project details");
       console.error("Error fetching project:", err);
+      setError("Không thể tải dữ liệu dự án");
     } finally {
       setLoading(false);
     }
@@ -154,836 +82,665 @@ export const ProjectDetail = () => {
       fetchProjectById();
       fetchEmployees();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
-  // Helper function để format date về ISO string cho API
-  const formatDateForAPI = (date: string | Date): string => {
-    if (!date) return "";
-
-    // Nếu đã là string ISO, return luôn
-    if (typeof date === "string" && date.includes("T")) {
-      return date;
-    }
-
-    // Nếu là Date object hoặc string khác, convert về ISO
-    const dateObj = typeof date === "string" ? new Date(date) : date;
-    return dateObj.toISOString();
+  // ✅ Hàm để lấy thông tin employee theo ID
+  const getEmployeeById = (employeeId: string): IEmployee | undefined => {
+    return employees.find((emp) => emp.id === employeeId);
   };
 
-  // Handlers cho Tasks
-  const handleSaveTask = async (updatedTask: ITask): Promise<boolean> => {
-    try {
-      const payload = {
-        ...updatedTask,
-        id: updatedTask.id,
-        // Format dates trước khi gửi API
-        start_date: formatDateForAPI(updatedTask.start_date),
-        expected_end_date: formatDateForAPI(updatedTask.expected_end_date),
-      };
+  // ✅ Hàm để lấy tên employee
+  const getEmployeeName = (employeeId: string, employeeData?: any): string => {
+    if (employeeData) {
+      return employeeData.name || employeeData.full_name || "N/A";
+    }
+    const employee = getEmployeeById(employeeId);
+    if (employee) {
+      return employee.name || employee.full_name || "N/A";
+    }
+    return `ID: ${employeeId}`;
+  };
 
-      const response = await apiService.post("project/Task", payload);
-      if (response.succeeded) {
-        message.success("Cập nhật công việc thành công");
-        await fetchProjectById();
+  // ✅ Hàm để lấy vai trò của employee từ project_member
+  const getEmployeeRoleInProject = (
+    employeeId: string,
+    projectMembers: any[],
+  ): string | null => {
+    if (!projectMembers || projectMembers.length === 0) return null;
+    const member = projectMembers.find((m) => m.employee_id === employeeId);
+    return member?.role || null;
+  };
+
+  // ✅ Hàm xử lý khi lưu thay đổi project
+  const handleProjectSave = async (record: IProject): Promise<boolean> => {
+    try {
+      const response = await apiService.put(`/Project/${record.id}`, record);
+      if (response?.succeeded) {
+        message.success("Cập nhật dự án thành công!");
+        setPrjDetail(record);
         return true;
-      }
-      message.error("Cập nhật thất bại");
-      return false;
-    } catch (error) {
-      message.error("Có lỗi xảy ra khi cập nhật");
-      console.error(error);
-      return false;
-    }
-  };
-
-  const handleDeleteTask = async (task: ITask): Promise<void> => {
-    try {
-      const response = await apiService.post("project/Task", {
-        ...task,
-        is_deleted: true,
-      });
-      if (response.succeeded) {
-        message.success("Xóa công việc thành công");
-        await fetchProjectById();
       } else {
-        message.error("Xóa thất bại");
+        message.error("Cập nhật dự án thất bại!");
+        return false;
       }
-    } catch (error) {
-      message.error("Có lỗi xảy ra khi xóa");
-      console.error(error);
+    } catch (err) {
+      console.error("Error updating project:", err);
+      message.error("Có lỗi xảy ra khi cập nhật!");
+      return false;
     }
   };
 
-  // Handlers cho Task Members
-  const handleSaveTaskMember = async (
-    updatedMember: ITaskMember,
-  ): Promise<boolean> => {
+  // ✅ Hàm xử lý khi lưu thay đổi task - CẬP NHẬT MỚI
+  const handleTaskSave = async (record: ITask): Promise<boolean> => {
     try {
-      // Tìm thông tin nhân viên từ employee_id
-      const employee = employees.find(
-        (e) => e.id === updatedMember.employee_id,
-      );
+      // Xử lý module - nếu là object thì lấy id hoặc name, nếu là string thì giữ nguyên
+      let moduleValue = "";
+      if (record.module) {
+        if (typeof record.module === "object" && record.module !== null) {
+          // Nếu module là object, lấy id hoặc name
+          moduleValue =
+            (record.module as any).id || (record.module as any).name || "";
+        } else if (typeof record.module === "string") {
+          // Nếu module đã là string, giữ nguyên
+          moduleValue = record.module;
+        }
+      }
 
+      // Chuẩn bị payload theo đúng format API yêu cầu
       const payload = {
-        id: updatedMember.id,
-        task_id: updatedMember.task_id,
-        employee_id: updatedMember.employee_id,
-        position: updatedMember.position,
-        full_name: employee?.full_name || updatedMember.full_name,
+        is_active: record.is_active ?? true,
+        is_deleted: record.is_deleted ?? false,
+        id: record.id,
+        project_id: record.project_id || prjDetail?.id,
+        module: moduleValue, // Đã xử lý để luôn là string
+        name: record.name || "",
+        description: record.description || "",
+        priority: record.priority ?? 0,
+        status: record.status || "",
+        percent_complete: record.percent_complete ?? 0,
+        start_date: record.start_date || null,
+        expected_end_date: record.expected_end_date || null,
+        actual_end_date: record.actual_end_date || null,
       };
 
       const response = await apiService.post(
-        "/api/work-track/project/Task/member",
+        "https://api.ltc365.com/api/work-track/project/Task",
         payload,
       );
-      if (response.succeeded) {
-        message.success("Cập nhật thành viên công việc thành công");
+
+      if (response?.succeeded) {
+        message.success("Cập nhật task thành công!");
+        // Refresh project data để cập nhật UI
         await fetchProjectById();
         return true;
+      } else {
+        message.error("Cập nhật task thất bại!");
+        return false;
       }
-      message.error("Cập nhật thất bại");
-      return false;
-    } catch (error) {
-      message.error("Có lỗi xảy ra khi cập nhật");
-      console.error(error);
+    } catch (err) {
+      console.error("Error updating task:", err);
+      message.error("Có lỗi xảy ra khi cập nhật task!");
       return false;
     }
   };
 
-  const handleDeleteTaskMember = async (member: ITaskMember): Promise<void> => {
+  // ✅ Hàm xử lý khi xóa task
+  const handleTaskDelete = async (record: ITask) => {
     try {
-      const response = await apiService.post(
-        "/api/work-track/project/Task/member",
-        {
-          id: member.id,
-          task_id: member.task_id,
-          employee_id: member.employee_id,
-          position: member.position,
-          is_deleted: true,
-        },
-      );
-      if (response.succeeded) {
-        message.success("Xóa thành viên công việc thành công");
+      const response = await apiService.delete(`/Task/${record.id}`);
+      if (response?.succeeded) {
+        message.success("Xóa task thành công!");
         await fetchProjectById();
       } else {
-        message.error("Xóa thất bại");
+        message.error("Xóa task thất bại!");
       }
-    } catch (error) {
-      message.error("Có lỗi xảy ra khi xóa");
-      console.error(error);
+    } catch (err) {
+      console.error("Error deleting task:", err);
+      message.error("Có lỗi xảy ra khi xóa task!");
     }
   };
 
-  // Handlers cho Project Members
-  const handleSaveMember = async (
-    updatedMember: IProjectMember,
-  ): Promise<boolean> => {
+  // ✅ Hàm xử lý khi lưu thay đổi member
+  const handleMemberSave = async (record: any): Promise<boolean> => {
     try {
-      const payload = {
-        ...updatedMember,
-        employee_id: updatedMember.employee_id,
-        project_id: updatedMember.project_id,
+      // Đảm bảo có đủ thông tin để update
+      const updateData = {
+        project_id: record.project_id || id,
+        employee_id: record.employee_id,
+        role: record.role,
+        joined_date: record.joined_date,
+        is_active: record.is_active,
       };
 
-      const response = await apiService.post("/ProjectMember", payload);
-      if (response.succeeded) {
-        message.success("Cập nhật thành viên thành công");
+      const response = await apiService.put(
+        `/ProjectMember/${updateData.project_id}/${updateData.employee_id}`,
+        updateData,
+      );
+
+      if (response?.succeeded) {
+        message.success("Cập nhật thành viên thành công!");
         await fetchProjectById();
         return true;
+      } else {
+        message.error("Cập nhật thành viên thất bại!");
+        return false;
       }
-      message.error("Cập nhật thất bại");
-      return false;
-    } catch (error) {
-      message.error("Có lỗi xảy ra khi cập nhật");
-      console.error(error);
+    } catch (err) {
+      console.error("Error updating member:", err);
+      message.error("Có lỗi xảy ra khi cập nhật thành viên!");
       return false;
     }
   };
 
-  const handleDeleteMember = async (member: IProjectMember): Promise<void> => {
+  // ✅ Hàm xử lý khi xóa member
+  const handleMemberDelete = async (record: any) => {
     try {
-      const response = await apiService.post("/ProjectMember", {
-        ...member,
-        is_deleted: true,
-      });
-      if (response.succeeded) {
-        message.success("Xóa thành viên thành công");
+      const response = await apiService.delete(
+        `/ProjectMember/${record.project_id || id}/${record.employee_id}`,
+      );
+      if (response?.succeeded) {
+        message.success("Xóa thành viên thành công!");
         await fetchProjectById();
       } else {
-        message.error("Xóa thất bại");
+        message.error("Xóa thành viên thất bại!");
       }
-    } catch (error) {
-      message.error("Có lỗi xảy ra khi xóa");
-      console.error(error);
+    } catch (err) {
+      console.error("Error deleting member:", err);
+      message.error("Có lỗi xảy ra khi xóa thành viên!");
     }
   };
 
-  // Columns cho Task Members (nested table)
-  const taskMemberColumns = [
+  // ✅ Columns cho task table - CÓ THỂ CHỈNH SỬA bằng cách click vào cell
+  const getTaskColumns = (projectMembers: any[]) => [
     {
-      title: "Nhân viên",
-      dataIndex: "employee_id",
-      key: "employee_id",
-      width: "35%",
-      type: "select" as const,
-      options: employees.map((emp) => ({
-        label: `${emp.full_name} (${emp.id})`,
-        value: emp.id,
-      })),
-      render: (employeeId: string, record: ITaskMember) => {
-        const employee = employees.find((e) => e.id === employeeId);
-        return (
-          <Space>
-            <UserOutlined style={{ color: "#1890ff" }} />
-            <div>
-              <Text strong style={{ color: "#1890ff" }}>
-                {record.full_name || employee?.full_name || employeeId}
-              </Text>
-              <br />
-              <Text type="secondary" style={{ fontSize: "11px" }}>
-                {employeeId}
-              </Text>
-            </div>
-          </Space>
-        );
-      },
-    },
-    {
-      title: "Vị trí",
-      dataIndex: "position",
-      key: "position",
-      width: "25%",
-      type: "select" as const,
-      options: [
-        { label: "FE", value: "FE" },
-        { label: "BE", value: "BE" },
-        { label: "QC", value: "QC" },
-        { label: "BA", value: "BA" },
-        { label: "Designer", value: "Designer" },
-        { label: "Tester", value: "Tester" },
-      ],
-      render: (position: string) => (
-        <Tag color={getRoleColor(position)} icon={<UserOutlined />}>
-          {position}
-        </Tag>
-      ),
-    },
-    {
-      title: "Ngày phân công",
-      dataIndex: "assigned_date",
-      key: "assigned_date",
-      width: "40%",
-      render: (date: string) =>
-        date && date !== "0001-01-01T00:00:00" ? (
-          <Text style={{ fontSize: "12px" }}>
-            <CalendarOutlined /> {dayjs(date).format("DD/MM/YYYY HH:mm")}
-          </Text>
-        ) : (
-          <Text type="secondary">N/A</Text>
-        ),
-    },
-  ];
-
-  // Columns cho Tasks với TableComponent
-  const taskColumns = [
-    {
-      title: "Tên công việc",
+      title: "Tên task",
       dataIndex: "name",
       key: "name",
-      width: "18%",
-      type: "text" as const,
-      render: (text: string) => (
-        <Text strong style={{ color: "#1890ff" }}>
-          {text}
-        </Text>
-      ),
+      width: 180,
+      fixed: "left" as const,
+      editable: true,
+      inputType: "text" as const,
+    },
+    {
+      title: "Phân hệ",
+      dataIndex: "module",
+      key: "module",
+      width: 130,
+      editable: false,
+      render: (module: any) => {
+        if (!module) return "-";
+        return <Tag>{module.name}</Tag>;
+      },
     },
     {
       title: "Mô tả",
       dataIndex: "description",
       key: "description",
-      width: "15%",
-      type: "text" as const,
-      ellipsis: true,
-      render: (text: string | null) => (
-        <Text type="secondary">{text || "Không có mô tả"}</Text>
-      ),
-    },
-    {
-      title: "Ưu tiên",
-      dataIndex: "priority",
-      key: "priority",
-      width: "10%",
-      type: "select" as const,
-      options: [
-        { label: "Cao", value: 1 },
-        { label: "Trung bình", value: 2 },
-        { label: "Thấp", value: 3 },
-      ],
-      render: (priority: number) => {
-        const priorityMap: Record<number, { text: string; color: string }> = {
-          1: { text: "Cao", color: "red" },
-          2: { text: "Trung bình", color: "orange" },
-          3: { text: "Thấp", color: "default" },
-        };
-        const p = priorityMap[priority] || {
-          text: "Không xác định",
-          color: "default",
-        };
-        return (
-          <Tag color={p.color} icon={<FlagOutlined />}>
-            {p.text}
-          </Tag>
-        );
-      },
-    },
-    {
-      title: "Trạng thái",
-      dataIndex: "status",
-      key: "status",
-      width: "11%",
-      type: "select" as const,
-      options: [
-        { label: "Planning", value: "Planning" },
-        { label: "Processing", value: "Processing" },
-        { label: "Completed", value: "Completed" },
-        { label: "Cancelled", value: "Cancelled" },
-      ],
-      render: (status: string) => (
-        <Tag color={getStatusColor(status)}>{status}</Tag>
-      ),
-    },
-    {
-      title: "Tiến độ (%)",
-      dataIndex: "percent_complete",
-      key: "percent_complete",
-      width: "10%",
-      type: "number" as const,
-      render: (percent: number) => (
-        <Progress
-          percent={percent}
-          size="small"
-          status={percent === 100 ? "success" : "active"}
-        />
-      ),
+      width: 200,
+      editable: true,
+      inputType: "text" as const,
+      render: (value: string) => value || "-",
     },
     {
       title: "Ngày bắt đầu",
       dataIndex: "start_date",
       key: "start_date",
-      width: "10%",
-      type: "date" as const,
-      render: (date: string) => {
-        if (!date || date === "0001-01-01T00:00:00") {
-          return <Text type="secondary">N/A</Text>;
-        }
-        return (
-          <Text style={{ fontSize: "12px" }}>
-            <CalendarOutlined /> {dayjs(date).format("DD/MM/YYYY")}
-          </Text>
-        );
+      width: 130,
+      editable: true,
+      inputType: "date" as const,
+      render: (value: string) =>
+        value ? dayjs(value).format("DD/MM/YYYY") : "-",
+    },
+    {
+      title: "Ngày dự kiến",
+      dataIndex: "expected_end_date",
+      key: "expected_end_date",
+      width: 130,
+      editable: true,
+      inputType: "date" as const,
+      render: (value: string) =>
+        value ? dayjs(value).format("DD/MM/YYYY") : "-",
+    },
+    {
+      title: "Ngày hoàn thành",
+      dataIndex: "actual_end_date",
+      key: "actual_end_date",
+      width: 140,
+      editable: true,
+      inputType: "date" as const,
+      render: (value: string) =>
+        value ? dayjs(value).format("DD/MM/YYYY") : "-",
+    },
+    {
+      title: "Trạng thái",
+      dataIndex: "status",
+      key: "status",
+      width: 130,
+      editable: true,
+      inputType: "select" as const,
+      options: [
+        { label: "Chờ xử lý", value: "PENDING" },
+        { label: "Đang xử lý", value: "PROCESSING" },
+        { label: "Hoàn thành", value: "COMPLETED" },
+        { label: "Đã hủy", value: "CANCELLED" },
+        { label: "Mở", value: "OPEN" },
+      ],
+      render: (value: string) => {
+        const statusColor = getStatusColor(value);
+        const statusMap: Record<string, string> = {
+          PENDING: "Chờ xử lý",
+          PROCESSING: "Đang xử lý",
+          COMPLETED: "Hoàn thành",
+          CANCELLED: "Đã hủy",
+          OPEN: "Mở",
+        };
+        return <Tag color={statusColor}>{statusMap[value] || value}</Tag>;
       },
     },
     {
-      title: "Ngày kết thúc",
-      dataIndex: "expected_end_date",
-      key: "expected_end_date",
-      width: "10%",
-      type: "date" as const,
-      render: (date: string) => {
-        if (!date || date === "0001-01-01T00:00:00") {
-          return <Text type="secondary">N/A</Text>;
-        }
-        return (
-          <Text style={{ fontSize: "12px" }}>
-            <ClockCircleOutlined /> {dayjs(date).format("DD/MM/YYYY")}
-          </Text>
-        );
+      title: "Tiến độ (%)",
+      dataIndex: "percent_complete",
+      key: "percent_complete",
+      width: 100,
+      editable: true,
+      inputType: "number" as const,
+      render: (value: number) => `${value || 0}%`,
+    },
+    {
+      title: "Ưu tiên",
+      dataIndex: "priority",
+      key: "priority",
+      width: 120,
+      editable: true,
+      inputType: "select" as const,
+      options: [
+        { label: "Thấp", value: 0 },
+        { label: "Trung bình", value: 1 },
+        { label: "Cao", value: 2 },
+      ],
+      render: (value: number) => {
+        const priorityColor = getPriorityColor(value);
+        const priorityMap: Record<number, string> = {
+          0: "Thấp",
+          1: "Trung bình",
+          2: "Cao",
+        };
+        return <Tag color={priorityColor}>{priorityMap[value] || "Thấp"}</Tag>;
       },
     },
     {
       title: "Thành viên",
-      key: "members",
-      width: "16%",
-      render: (_: unknown, record: ITask) => {
-        const memberCount = record.task_member?.length || 0;
-        const isExpanded = expandedRowKeys.includes(record.id);
-
-        if (memberCount === 0) {
-          return (
-            <Space>
-              <Text type="secondary" style={{ fontSize: "12px" }}>
-                <UserOutlined /> Chưa có
-              </Text>
-              <Button
-                size="small"
-                type="link"
-                onClick={() => {
-                  setExpandedRowKeys(
-                    isExpanded
-                      ? expandedRowKeys.filter((k) => k !== record.id)
-                      : [...expandedRowKeys, record.id],
-                  );
-                }}
-              >
-                Quản lý
-              </Button>
-            </Space>
-          );
+      dataIndex: "task_member",
+      key: "task_member",
+      width: 200,
+      editable: false,
+      render: (members: any[]) => {
+        if (!members || members.length === 0) {
+          return <Text type="secondary">Chưa có</Text>;
         }
-
         return (
-          <Space>
-            <Tag
-              color={isExpanded ? "green" : "blue"}
-              icon={<TeamOutlined />}
-              style={{ cursor: "pointer" }}
-              onClick={() => {
-                setExpandedRowKeys(
-                  isExpanded
-                    ? expandedRowKeys.filter((k) => k !== record.id)
-                    : [...expandedRowKeys, record.id],
-                );
-              }}
-            >
-              {memberCount} thành viên
-            </Tag>
-            <Text
-              type="secondary"
-              style={{ fontSize: "11px", cursor: "pointer" }}
-              onClick={() => {
-                setExpandedRowKeys(
-                  isExpanded
-                    ? expandedRowKeys.filter((k) => k !== record.id)
-                    : [...expandedRowKeys, record.id],
-                );
-              }}
-            >
-              ({isExpanded ? "Đóng" : "Mở"})
-            </Text>
-          </Space>
-        );
-      },
-    },
-  ];
-
-  // Columns cho Project Members với TableComponent
-  const memberColumns = [
-    {
-      title: "Nhân viên",
-      dataIndex: "employee_id",
-      key: "employee_id",
-      width: "35%",
-      type: "select" as const,
-      options: employees.map((emp) => ({
-        label: `${emp.full_name} (${emp.id})`,
-        value: emp.id,
-      })),
-      render: (employeeId: string) => {
-        const employee = employees.find((e) => e.id === employeeId);
-        return (
-          <Space>
-            <UserOutlined style={{ color: "#1890ff" }} />
-            <div>
-              <Text strong>{employee?.full_name || employeeId}</Text>
-              <br />
-              <Text type="secondary" style={{ fontSize: "11px" }}>
-                {employeeId}
-              </Text>
-            </div>
+          <Space direction="vertical" size={4}>
+            {members.map((member, index) => {
+              const employeeName = getEmployeeName(
+                member.employee_id,
+                member.employee,
+              );
+              return (
+                <div
+                  key={index}
+                  style={{ display: "flex", alignItems: "center", gap: 4 }}
+                >
+                  <UserOutlined />
+                  <Text>{employeeName}</Text>
+                </div>
+              );
+            })}
           </Space>
         );
       },
     },
     {
       title: "Vai trò",
+      dataIndex: "task_member",
+      key: "task_member_role",
+      width: 150,
+      editable: false,
+      render: (members: any[]) => {
+        if (!members || members.length === 0) {
+          return <Text type="secondary">-</Text>;
+        }
+        const roleMap: Record<string, string> = {
+          LEADER: "Trưởng nhóm",
+          MEMBER: "Thành viên",
+          TESTER: "Kiểm thử",
+          DEVELOPER: "Lập trình viên",
+          DESIGNER: "Thiết kế",
+          PM: "Quản lý",
+        };
+        return (
+          <Space direction="vertical" size={4}>
+            {members.map((member, index) => {
+              const projectRole = getEmployeeRoleInProject(
+                member.employee_id,
+                projectMembers,
+              );
+              const roleColor = getRoleColor(projectRole || "");
+              return (
+                <Tag key={index} color={roleColor}>
+                  {projectRole ? roleMap[projectRole] || projectRole : "N/A"}
+                </Tag>
+              );
+            })}
+          </Space>
+        );
+      },
+    },
+  ];
+
+  // ✅ Columns cho member table - CÓ THỂ CHỈNH SỬA bằng cách click vào cell
+  const getMemberColumns = () => [
+    {
+      title: "STT",
+      key: "index",
+      width: 60,
+      editable: false,
+      render: (_: any, __: any, index: number) => index + 1,
+    },
+    {
+      title: "Tên nhân viên",
+      dataIndex: "employee_id",
+      key: "employee_name",
+      width: 200,
+      editable: false,
+      render: (employeeId: string, record: any) => {
+        const employeeName = getEmployeeName(employeeId, record.employee);
+        return (
+          <Space>
+            <UserOutlined />
+            <Text>{employeeName}</Text>
+          </Space>
+        );
+      },
+    },
+    {
+      title: "Email",
+      dataIndex: "employee_id",
+      key: "email",
+      width: 220,
+      editable: false,
+      render: (employeeId: string, record: any) => {
+        if (record.employee?.email) {
+          return record.employee.email;
+        }
+        const employee = getEmployeeById(employeeId);
+        return employee?.email || "-";
+      },
+    },
+    {
+      title: "Vai trò",
       dataIndex: "role",
       key: "role",
-      width: "20%",
-      type: "select" as const,
+      width: 150,
+      editable: true,
+      inputType: "select" as const,
       options: [
-        { label: "PM", value: "PM" },
-        { label: "DEV", value: "DEV" },
-        { label: "QC", value: "QC" },
-        { label: "BA", value: "BA" },
-        { label: "Designer", value: "Designer" },
-        { label: "Tester", value: "Tester" },
+        { label: "Trưởng nhóm", value: "LEADER" },
+        { label: "Thành viên", value: "MEMBER" },
+        { label: "Kiểm thử", value: "TESTER" },
+        { label: "Lập trình viên", value: "DEVELOPER" },
+        { label: "Thiết kế", value: "DESIGNER" },
+        { label: "Quản lý dự án", value: "PM" },
       ],
-      render: (role: string) => (
-        <Tag color={getRoleColor(role)} icon={<UserOutlined />}>
-          {role}
-        </Tag>
-      ),
+      render: (role: string) => {
+        const roleColor = getRoleColor(role);
+        const roleMap: Record<string, string> = {
+          LEADER: "Trưởng nhóm",
+          MEMBER: "Thành viên",
+          TESTER: "Kiểm thử",
+          DEVELOPER: "Lập trình viên",
+          DESIGNER: "Thiết kế",
+          PM: "Quản lý dự án",
+        };
+        return <Tag color={roleColor}>{roleMap[role] || role || "-"}</Tag>;
+      },
     },
     {
       title: "Ngày tham gia",
       dataIndex: "joined_date",
       key: "joined_date",
-      width: "22.5%",
-      render: (date: string) =>
-        date && date !== "0001-01-01T00:00:00" ? (
-          <Text style={{ fontSize: "12px" }}>
-            <CalendarOutlined /> {dayjs(date).format("DD/MM/YYYY")}
-          </Text>
-        ) : (
-          <Text type="secondary">N/A</Text>
-        ),
+      width: 140,
+      editable: true,
+      inputType: "date" as const,
+      render: (value: string) =>
+        value ? dayjs(value).format("DD/MM/YYYY") : "-",
     },
     {
-      title: "Ngày rời đi",
-      dataIndex: "left_date",
-      key: "left_date",
-      width: "22.5%",
-      render: (date: string) =>
-        date && date !== "0001-01-01T00:00:00" ? (
-          <Text style={{ fontSize: "12px" }}>
-            <ClockCircleOutlined /> {dayjs(date).format("DD/MM/YYYY")}
-          </Text>
-        ) : (
-          <Tag color="success">Đang làm việc</Tag>
-        ),
+      title: "Trạng thái",
+      dataIndex: "is_active",
+      key: "is_active",
+      width: 140,
+      editable: true,
+      inputType: "select" as const,
+      options: [
+        { label: "Hoạt động", value: true },
+        { label: "Không hoạt động", value: false },
+      ],
+      render: (value: boolean) => (
+        <Tag color={value !== false ? "success" : "default"}>
+          {value !== false ? "Hoạt động" : "Không hoạt động"}
+        </Tag>
+      ),
     },
   ];
 
-  if (loading) {
+  // ✅ Columns cho project table - CÓ THỂ CHỈNH SỬA bằng cách click vào cell
+  const projectColumns = [
+    {
+      title: "Tên dự án",
+      dataIndex: "name",
+      key: "name",
+      editable: true,
+      inputType: "text" as const,
+      width: 200,
+    },
+    {
+      title: "Ngày bắt đầu",
+      dataIndex: "start_date",
+      key: "start_date",
+      editable: true,
+      inputType: "date" as const,
+      width: 150,
+      render: (value: string) =>
+        value ? dayjs(value).format("DD/MM/YYYY") : "-",
+    },
+    {
+      title: "Ngày kết thúc",
+      dataIndex: "end_date",
+      key: "end_date",
+      editable: true,
+      inputType: "date" as const,
+      width: 150,
+      render: (value: string) =>
+        value ? dayjs(value).format("DD/MM/YYYY") : "-",
+    },
+    {
+      title: "Mô tả",
+      dataIndex: "description",
+      key: "description",
+      editable: true,
+      inputType: "text" as const,
+      width: 250,
+    },
+    {
+      title: "Trạng thái",
+      dataIndex: "status",
+      key: "status",
+      editable: true,
+      inputType: "select" as const,
+      width: 150,
+      options: [
+        { label: "Chờ xử lý", value: "Pending" },
+        { label: "Đang xử lý", value: "Processing" },
+        { label: "Hoàn thành", value: "Completed" },
+        { label: "Đã hủy", value: "Cancelled" },
+      ],
+      render: (value: string) => {
+        const statusColor = getStatusColor(value);
+        const statusMap: Record<string, string> = {
+          Pending: "Chờ xử lý",
+          Processing: "Đang xử lý",
+          Completed: "Hoàn thành",
+          Cancelled: "Đã hủy",
+        };
+        return <Tag color={statusColor}>{statusMap[value] || value}</Tag>;
+      },
+    },
+    {
+      title: "Ưu tiên",
+      dataIndex: "priority",
+      key: "priority",
+      editable: true,
+      inputType: "select" as const,
+      width: 120,
+      options: [
+        { label: "Thấp", value: 3 },
+        { label: "Trung bình", value: 2 },
+        { label: "Cao", value: 1 },
+      ],
+      render: (value: number) => {
+        const priorityColor = getPriorityColor(value);
+        const priorityMap: Record<number, string> = {
+          1: "Cao",
+          2: "Trung bình",
+          3: "Thấp",
+        };
+        return <Tag color={priorityColor}>{priorityMap[value] || "Thấp"}</Tag>;
+      },
+    },
+    {
+      title: "Phân hệ",
+      dataIndex: "project_module",
+      key: "project_module",
+      width: 150,
+      editable: false,
+      render: (modules: any[]) => {
+        if (!modules || modules.length === 0) return "-";
+        return (
+          <Space wrap>
+            {modules.map((module) => (
+              <Tag key={module.id}>{module.name}</Tag>
+            ))}
+          </Space>
+        );
+      },
+    },
+    {
+      title: "Số task",
+      dataIndex: "tasks",
+      key: "tasks",
+      width: 100,
+      editable: false,
+      render: (tasks: ITask[]) => {
+        if (!tasks || tasks.length === 0) return "0";
+        return <Tag>{tasks.length}</Tag>;
+      },
+    },
+    {
+      title: "Thành viên",
+      dataIndex: "project_member",
+      key: "project_member",
+      width: 120,
+      editable: false,
+      render: (members: any[]) => {
+        if (!members || members.length === 0) return "0";
+        return <Tag>{members.length}</Tag>;
+      },
+    },
+  ];
+
+  if (loading || loadingEmployees) {
     return (
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "center",
-          alignItems: "center",
-          minHeight: "100vh",
-        }}
-      >
-        <Spin size="large" tip="Đang tải dữ liệu..." />
+      <div style={{ textAlign: "center", padding: "50px" }}>
+        <Spin size="large" />
       </div>
     );
   }
 
   if (error || !prjDetail) {
     return (
-      <div style={{ padding: "24px" }}>
-        <Card>
-          <Empty
-            description={
-              <Text type="danger">{error || "Không tìm thấy dự án"}</Text>
-            }
-          />
-        </Card>
+      <div style={{ padding: "20px" }}>
+        <Empty description={error || "Không tìm thấy dự án"} />
       </div>
     );
   }
 
-  const completedTasks: number =
-    prjDetail.tasks?.filter((t: ITask) => t.status === "Completed").length || 0;
-  const totalTasks: number = prjDetail.tasks?.length || 0;
-
-  // Data cho bảng thông tin chi tiết
-  const projectInfoData: ProjectInfoDataItem[] = [
-    {
-      key: "1",
-      label: "Ngày bắt đầu",
-      value:
-        prjDetail.start_date && prjDetail.start_date !== "0001-01-01T00:00:00"
-          ? dayjs(prjDetail.start_date).format("DD/MM/YYYY")
-          : "Chưa xác định",
-      icon: <CalendarOutlined style={{ color: "#1890ff" }} />,
-    },
-    {
-      key: "2",
-      label: "Ngày kết thúc",
-      value:
-        prjDetail.end_date && prjDetail.end_date !== "0001-01-01T00:00:00"
-          ? dayjs(prjDetail.end_date).format("DD/MM/YYYY")
-          : "Chưa xác định",
-      icon: <ClockCircleOutlined style={{ color: "#52c41a" }} />,
-    },
-    {
-      key: "3",
-      label: "Trạng thái",
-      value: (
-        <Tag color={getStatusColor(prjDetail.status)}>{prjDetail.status}</Tag>
-      ),
-      icon: <CheckCircleOutlined style={{ color: "#52c41a" }} />,
-    },
-    {
-      key: "4",
-      label: "Độ ưu tiên",
-      value: (
-        <Tag color={getPriorityColor(prjDetail.priority)}>
-          {prjDetail.priority === 1
-            ? "Cao"
-            : prjDetail.priority === 2
-              ? "Trung bình"
-              : prjDetail.priority === 3
-                ? "Thấp"
-                : "Không xác định"}
-        </Tag>
-      ),
-      icon: <FlagOutlined style={{ color: "#faad14" }} />,
-    },
-    {
-      key: "5",
-      label: "Tổng số công việc",
-      value: totalTasks,
-      icon: <TeamOutlined style={{ color: "#722ed1" }} />,
-    },
-    {
-      key: "6",
-      label: "Tổng số thành viên",
-      value: prjDetail.project_member?.length || 0,
-      icon: <TeamOutlined style={{ color: "#13c2c2" }} />,
-    },
-  ];
-
   return (
-    <div
-      style={{
-        padding: "16px",
-        background: "#f0f2f5",
-        minHeight: "100vh",
-        overflow: "auto",
-      }}
-    >
-      <Space direction="vertical" size="middle" style={{ width: "100%" }}>
-        {/* Header Section with Project Info */}
-        <Card
-          bordered={false}
-          style={{
-            borderRadius: "8px",
-            boxShadow: "0 1px 4px rgba(0,0,0,0.08)",
-          }}
-          bodyStyle={{ padding: "16px" }}
-        >
-          <Row gutter={[16, 16]} align="top">
-            <Col xs={24} lg={10}>
-              <Space align="center" size="middle">
-                <FileTextOutlined
-                  style={{ fontSize: "28px", color: "#1890ff" }}
-                />
-                <div>
-                  <Title level={4} style={{ margin: 0, marginBottom: 4 }}>
-                    {prjDetail.name}
-                  </Title>
-                  <Text type="secondary" style={{ fontSize: "13px" }}>
-                    {prjDetail.description || "Không có mô tả"}
-                  </Text>
-                </div>
-              </Space>
-            </Col>
+    <div style={{ padding: "20px" }}>
+      <TableComponent
+        data={prjDetail ? [prjDetail] : []}
+        columns={projectColumns}
+        onSave={handleProjectSave}
+        loading={loading}
+        expandable={{
+          expandedRowRender: (record: IProject) => {
+            const hasTasks = record.tasks && record.tasks.length > 0;
+            const hasMembers =
+              record.project_member && record.project_member.length > 0;
 
-            <Col xs={24} lg={14}>
-              <Row gutter={[12, 12]}>
-                {projectInfoData.map((item) => (
-                  <Col xs={12} sm={8} key={item.key}>
-                    <Space
-                      direction="vertical"
-                      size={4}
-                      style={{ width: "100%" }}
-                    >
-                      <Space size={6}>
-                        {item.icon}
-                        <Text type="secondary" style={{ fontSize: "12px" }}>
-                          {item.label}
-                        </Text>
-                      </Space>
-                      <div style={{ paddingLeft: "28px" }}>
-                        {typeof item.value === "string" ||
-                        typeof item.value === "number" ? (
-                          <Text strong style={{ fontSize: "13px" }}>
-                            {item.value}
-                          </Text>
-                        ) : (
-                          item.value
-                        )}
-                      </div>
-                    </Space>
-                  </Col>
-                ))}
-              </Row>
-            </Col>
-          </Row>
-        </Card>
-
-        {/* Main Content Layout */}
-        <Row gutter={[12, 12]}>
-          {/* Full Width - Tasks and Members */}
-          <Col xs={24}>
-            <Card
-              title={
-                <Space
-                  style={{ width: "100%", justifyContent: "space-between" }}
-                >
-                  <Space>
-                    <Text strong style={{ fontSize: "14px" }}>
-                      Danh sách công việc
-                    </Text>
-                    <Tag color="blue">{prjDetail.tasks?.length || 0}</Tag>
-                  </Space>
-                  <Button
-                    type="primary"
-                    size="small"
-                    icon={<PlusOutlined />}
-                    onClick={() => message.info("Tính năng đang phát triển")}
-                  >
-                    Thêm
-                  </Button>
-                </Space>
-              }
-              bordered={false}
-              style={{
-                borderRadius: "8px",
-                boxShadow: "0 1px 4px rgba(0,0,0,0.08)",
-              }}
-              bodyStyle={{ padding: "12px" }}
-            >
-              {prjDetail.tasks && prjDetail.tasks.length > 0 ? (
-                <div>
-                  <TableComponent
-                    data={prjDetail.tasks}
-                    columns={taskColumns}
-                    onSave={handleSaveTask}
-                    onDelete={handleDeleteTask}
-                  />
-
-                  {/* Task Members Section - Expandable under main table */}
-                  {expandedRowKeys.length > 0 && (
-                    <Card
-                      style={{ marginTop: "12px" }}
-                      size="small"
-                      title={
-                        <Space>
-                          <TeamOutlined />
-                          <Text strong style={{ fontSize: "13px" }}>
-                            Thành viên công việc
-                          </Text>
-                          <Button
-                            size="small"
-                            type="link"
-                            onClick={() => setExpandedRowKeys([])}
-                          >
-                            Đóng
-                          </Button>
-                        </Space>
-                      }
-                    >
-                      {prjDetail.tasks
-                        .filter((task) => expandedRowKeys.includes(task.id))
-                        .map((task) => (
-                          <div key={task.id} style={{ marginBottom: "16px" }}>
-                            <Space
-                              style={{
-                                marginBottom: "8px",
-                                padding: "8px",
-                                background: "#f0f2f5",
-                                borderRadius: "4px",
-                                width: "100%",
-                              }}
-                            >
-                              <Text strong>{task.name}</Text>
-                              <Tag color="blue">
-                                {task.task_member?.length || 0} thành viên
-                              </Tag>
-                              <Button
-                                size="small"
-                                type="primary"
-                                icon={<PlusOutlined />}
-                                onClick={() =>
-                                  message.info("Tính năng đang phát triển")
-                                }
-                              >
-                                Thêm thành viên
-                              </Button>
-                            </Space>
-                            {task.task_member && task.task_member.length > 0 ? (
-                              <TableComponent
-                                data={task.task_member}
-                                columns={taskMemberColumns}
-                                onSave={handleSaveTaskMember}
-                                onDelete={handleDeleteTaskMember}
-                              />
-                            ) : (
-                              <Empty
-                                description="Chưa có thành viên"
-                                image={Empty.PRESENTED_IMAGE_SIMPLE}
-                              />
-                            )}
-                          </div>
-                        ))}
-                    </Card>
-                  )}
-                </div>
-              ) : (
+            if (!hasTasks && !hasMembers) {
+              return (
                 <Empty
-                  description="Chưa có công việc nào"
-                  image={Empty.PRESENTED_IMAGE_SIMPLE}
+                  description="Không có tasks hoặc thành viên"
+                  style={{ margin: "20px 0" }}
                 />
-              )}
+              );
+            }
 
-              {/* Project Members Section - Expandable Toggle */}
-              <div style={{ marginTop: "16px" }}>
-                <Space
-                  style={{
-                    width: "100%",
-                    justifyContent: "space-between",
-                    padding: "8px",
-                    background: "#f0f5ff",
-                    borderRadius: "4px",
-                    cursor: "pointer",
-                  }}
-                  onClick={() => setShowProjectMembers(!showProjectMembers)}
-                >
-                  <Space>
-                    <TeamOutlined style={{ color: "#1890ff" }} />
-                    <Text strong style={{ fontSize: "14px" }}>
-                      Thành viên dự án
-                    </Text>
-                    <Tag color="purple">
-                      {prjDetail.project_member?.length || 0}
-                    </Tag>
-                  </Space>
-                  <Space>
-                    <Button
-                      type="primary"
-                      size="small"
-                      icon={<PlusOutlined />}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        message.info("Tính năng đang phát triển");
-                      }}
-                    >
-                      Thêm
-                    </Button>
-                    <Text type="secondary" style={{ fontSize: "12px" }}>
-                      {showProjectMembers ? "Thu gọn" : "Mở rộng"}
-                    </Text>
-                  </Space>
-                </Space>
+            const taskColumns = getTaskColumns(record.project_member || []);
+            const memberColumns = getMemberColumns();
 
-                {showProjectMembers && (
-                  <div style={{ marginTop: "12px" }}>
-                    {prjDetail.project_member &&
-                    prjDetail.project_member.length > 0 ? (
-                      <TableComponent
-                        data={prjDetail.project_member}
-                        columns={memberColumns}
-                        onSave={handleSaveMember}
-                        onDelete={handleDeleteMember}
-                      />
-                    ) : (
-                      <Empty
-                        description="Chưa có thành viên"
-                        image={Empty.PRESENTED_IMAGE_SIMPLE}
-                      />
-                    )}
+            return (
+              <div style={{ padding: "0 24px" }}>
+                {/* Tasks Section - CÓ THỂ CHỈNH SỬA bằng click vào cell */}
+                {hasTasks && (
+                  <div>
+                    <Title level={5} style={{ marginBottom: 16 }}>
+                      📋 Danh sách Tasks
+                      <Text
+                        type="secondary"
+                        style={{ fontSize: 12, marginLeft: 8 }}
+                      >
+                        (Click vào cell để chỉnh sửa)
+                      </Text>
+                    </Title>
+                    <TableComponent
+                      data={record.tasks || []}
+                      columns={taskColumns}
+                      onSave={handleTaskSave}
+                      onDelete={handleTaskDelete}
+                      loading={false}
+                    />
                   </div>
                 )}
+
+                {/* Empty States */}
+                {!hasTasks && hasMembers && (
+                  <>
+                    <Empty
+                      description="Không có tasks"
+                      style={{ margin: "20px 0" }}
+                    />
+                    <Divider />
+                  </>
+                )}
               </div>
-            </Card>
-          </Col>
-        </Row>
-      </Space>
+            );
+          },
+          rowExpandable: (record: IProject) =>
+            (record.tasks && record.tasks.length > 0) ||
+            (record.project_member && record.project_member.length > 0),
+        }}
+      />
     </div>
   );
 };

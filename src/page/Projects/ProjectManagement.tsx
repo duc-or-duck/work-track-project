@@ -6,7 +6,7 @@ import { Plus } from "lucide-react";
 import { FormModal } from "../../components/FormModal";
 import { ConfirmModal } from "../../components/ConfirmModal";
 import { useNavigate } from "react-router-dom";
-import { TableComponent } from "../../components/TableComponent";
+import { TableComponent } from "../../components/TableComponent/TableComponent";
 import {
   calculateDaysBetween,
   calculateOverdueDays,
