@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import apiService from "../../Services/ApiService";
 import type { IEmployee, ITableType } from "../../types/initialTypes";
 import { Button } from "antd";
-import { Edit2Icon, Plus, Trash2Icon } from "lucide-react";
+import { Plus } from "lucide-react";
 import { FormModal } from "../../components/FormModal";
 import { ConfirmModal } from "../../components/ConfirmModal";
 import { TableComponent } from "../../components/TableComponent/TableComponent";

@@ -1,10 +1,14 @@
-import { Form, Input, Modal, Select, Tag, Space } from "antd";
+import { Form, Input, Modal, Select, Tag, DatePicker } from "antd";
 import { useEffect } from "react";
-import type { Column, FormPopupProps } from "../types/initialTypes";
+import type { FormPopupProps, IColumn } from "../types/initialTypes";
+import dayjs from "dayjs";
 
-// Thêm type cho multi-select
-type ExtendedColumn = Column & {
+// Thêm type cho multi-select và date
+type ExtendedColumn = IColumn & {
   multiple?: boolean;
+  showTime?: boolean;
+  format?: string;
+  picker?: "date" | "week" | "month" | "quarter" | "year";
 };
 
 export const FormModal = ({
@@ -20,18 +24,36 @@ export const FormModal = ({
 
   useEffect(() => {
     if (open && initialValues) {
-      // Xử lý giá trị multi-select nếu có
+      // Xử lý giá trị date và multi-select
       const processedValues = { ...initialValues };
+
+      // Convert date strings to dayjs objects
+      columns.forEach((column: ExtendedColumn) => {
+        if (column.type === "date" && processedValues[column.key]) {
+          processedValues[column.key] = dayjs(processedValues[column.key]);
+        }
+      });
+
       form.setFieldsValue(processedValues);
     } else {
       form.resetFields();
     }
-  }, [open, initialValues, form]);
+  }, [open, initialValues, form, columns]);
 
   const handleOk = async () => {
     try {
       const values = await form.validateFields();
-      onSubmit(values);
+
+      // Convert dayjs objects back to strings
+      const processedValues = { ...values };
+      columns.forEach((column: ExtendedColumn) => {
+        if (column.type === "date" && processedValues[column.key]) {
+          processedValues[column.key] =
+            processedValues[column.key].toISOString();
+        }
+      });
+
+      onSubmit(processedValues);
     } catch (error) {
       console.error("Validation failed:", error);
     }
@@ -65,7 +87,6 @@ export const FormModal = ({
           return (
             <Select
               mode="multiple"
-              showArrow
               tagRender={tagRender}
               placeholder={`Chọn ${column.label.toLowerCase()}`}
               options={column.options}
@@ -74,15 +95,15 @@ export const FormModal = ({
               style={{ width: "100%" }}
               maxTagCount="responsive"
               maxTagTextLength={10}
-              dropdownStyle={{ maxHeight: 250 }}
-              filterOption={(input, option) =>
-                (option?.label ?? "")
-                  .toLowerCase()
-                  .includes(input.toLowerCase())
-              }
-              // Thêm clear icon và dropdownMatchSelectWidth
+              listHeight={250}
+              showSearch={{
+                filterOption: (input, option) =>
+                  String(option?.label ?? "")
+                    .toLowerCase()
+                    .includes(input.toLowerCase()),
+              }}
               allowClear
-              dropdownMatchSelectWidth={true}
+              popupMatchSelectWidth={true}
             />
           );
         }
@@ -96,6 +117,34 @@ export const FormModal = ({
             allowClear
           />
         );
+
+      case "date":
+        return (
+          <DatePicker
+            placeholder={`Chọn ${column.label.toLowerCase()}`}
+            disabled={column.disabled}
+            size="large"
+            style={{ width: "100%" }}
+            format={column.format || "DD/MM/YYYY"}
+            picker={column.picker || "date"}
+            showTime={column.showTime}
+            allowClear
+          />
+        );
+
+      case "dateRange":
+        return (
+          <DatePicker.RangePicker
+            placeholder={["Từ ngày", "Đến ngày"]}
+            disabled={column.disabled}
+            size="large"
+            style={{ width: "100%" }}
+            format={column.format || "DD/MM/YYYY"}
+            showTime={column.showTime}
+            allowClear
+          />
+        );
+
       case "textarea":
         return (
           <Input.TextArea
@@ -106,6 +155,7 @@ export const FormModal = ({
             style={{ resize: "none" }}
           />
         );
+
       case "number":
         return (
           <Input
@@ -115,6 +165,7 @@ export const FormModal = ({
             size="large"
           />
         );
+
       default:
         return (
           <Input
@@ -126,16 +177,22 @@ export const FormModal = ({
     }
   };
 
-  // Validation rules cho multi-select
+  // Validation rules
   const getRules = (column: ExtendedColumn) => {
     const baseRules = [
       {
         required: column.required,
-        message: `Vui lòng ${column.type === "select" ? "chọn" : "nhập"} ${column.label.toLowerCase()}`,
+        message: `Vui lòng ${
+          column.type === "select" ||
+          column.type === "date" ||
+          column.type === "dateRange"
+            ? "chọn"
+            : "nhập"
+        } ${column.label.toLowerCase()}`,
       },
     ];
 
-    // Thêm validation đặc biệt cho multi-select
+    // Validation cho multi-select
     if (column.type === "select" && column.multiple && column.required) {
       return [
         ...baseRules,
@@ -216,7 +273,7 @@ export const FormModal = ({
             }
             rules={getRules(column)}
             style={{ marginBottom: 20 }}
-            // Thêm normalize cho multi-select để đảm bảo luôn là array
+            // Normalize cho multi-select và date
             normalize={(value) => {
               if (column.type === "select" && column.multiple) {
                 return Array.isArray(value) ? value : [];

@@ -22,7 +22,6 @@ export const ProjectManagement = () => {
   const [selectedProject, setSelectedProject] = useState<IProject | null>(null);
   const [modalType, setModalType] = useState<ITableType>();
   const [loading, setLoading] = useState(false);
-
   const navigate = useNavigate();
 
   const getListProject = async () => {

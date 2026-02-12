@@ -35,7 +35,6 @@ apiClient.interceptors.response.use(
     return response.data;
   },
   (error) => {
-    // Xử lý các lỗi
     const errorMessage = error.response?.data?.message || 'Đã có lỗi xảy ra';
     const errorStatus = error.response?.status;
 
@@ -51,31 +50,44 @@ apiClient.interceptors.response.use(
   }
 );
 
-// API Service Object
+// Helper: chuyển object params thành config.params nếu chưa có
+const normalizeConfig = (config?: AxiosRequestConfig | Record<string, any>): AxiosRequestConfig => {
+  if (!config) return {};
+  
+  // Nếu config đã có cấu trúc AxiosRequestConfig (chứa params, headers, ...)
+  if ('params' in config || 'headers' in config || 'timeout' in config || 'signal' in config) {
+    return config as AxiosRequestConfig;
+  }
+  
+  // Ngược lại, coi toàn bộ config là params object
+  return { params: config };
+};
+
+// API Service Object - ĐÃ CẬP NHẬT
 const apiService = {
-  // GET request
-  get: <T = any>(url: string, config?: AxiosRequestConfig): Promise<T> => {
-    return apiClient.get(url, config);
+  // GET request - hỗ trợ params trực tiếp
+  get: <T = any>(url: string, config?: AxiosRequestConfig | Record<string, any>): Promise<T> => {
+    return apiClient.get(url, normalizeConfig(config));
   },
 
-  // POST request
+  // POST request - giữ nguyên (dành cho data)
   post: <T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T> => {
     return apiClient.post(url, data, config);
   },
 
-  // PUT request
+  // PUT request - giữ nguyên
   put: <T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T> => {
     return apiClient.put(url, data, config);
   },
 
-  // PATCH request
+  // PATCH request - giữ nguyên
   patch: <T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T> => {
     return apiClient.patch(url, data, config);
   },
 
-  // DELETE request
-  delete: <T = any>(url: string, config?: AxiosRequestConfig): Promise<T> => {
-    return apiClient.delete(url, config);
+  // DELETE request - hỗ trợ params trực tiếp (giống GET)
+  delete: <T = any>(url: string, config?: AxiosRequestConfig | Record<string, any>): Promise<T> => {
+    return apiClient.delete(url, normalizeConfig(config));
   },
 };
 

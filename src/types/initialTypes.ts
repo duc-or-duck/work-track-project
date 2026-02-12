@@ -51,7 +51,7 @@ export interface FormPopupProps {
   title?: string;
   columns: IColumn[] | [];
   initialValues?: any;
-  onSubmit?: (values: any) => void;
+  onSubmit: (values: any) => void;
   onCancel?: () => void;
   loading?: boolean;
 }
