@@ -1,7 +1,13 @@
 import { useEffect, useState } from "react";
-import type { IProject, ITableType } from "../../types/initialTypes";
+import {
+  type IEmployee,
+  type IProject,
+  type IProjectMember,
+  type ITableType,
+  type ITask,
+} from "../../types/initialTypes";
 import apiService from "../../Services/ApiService";
-import { Button, Tag, message } from "antd";
+import { Button, Row, Tag, message } from "antd";
 import { Plus } from "lucide-react";
 import { FormModal } from "../../components/FormModal";
 import { ConfirmModal } from "../../components/ConfirmModal";
@@ -17,11 +23,13 @@ import { formColumns } from "./ProjectColumn";
 
 export const ProjectManagement = () => {
   const [projects, setProjects] = useState<IProject[]>([]);
+  const [projectDetail, setprojectDetail] = useState<IProject[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isModalConfirmOpen, setIsModalConfirmOpen] = useState(false);
   const [selectedProject, setSelectedProject] = useState<IProject | null>(null);
   const [modalType, setModalType] = useState<ITableType>();
   const [loading, setLoading] = useState(false);
+  const [empDataList, setEmpData] = useState<IEmployee[]>([]);
   const navigate = useNavigate();
 
   const getListProject = async () => {
@@ -29,14 +37,34 @@ export const ProjectManagement = () => {
     const response = await apiService.get("/Project");
     if (response.succeeded) {
       const projectData = response?.data;
-      console.log("Projects loaded:", projectData);
       setProjects(projectData);
+    }
+    setLoading(false);
+  };
+
+  const getEmproject = async () => {
+    setLoading(true);
+    const response = await apiService.get("/Project/detail");
+    if (response?.succeeded) {
+      const projectDetailData = response?.data;
+      console.log("âcscascascasc", projectDetailData);
+      setprojectDetail(projectDetailData);
+    }
+  };
+
+  const getEmplist = async () => {
+    setLoading(true);
+    const response = await apiService.get("/Employee");
+    if (response.succeeded) {
+      const empData = response?.data;
+      setEmpData(empData);
     }
     setLoading(false);
   };
 
   useEffect(() => {
     getListProject();
+    getEmproject();
   }, []);
   const handleTableAction = async (record?: IProject, type?: ITableType) => {
     setModalType(type || null);
@@ -291,6 +319,30 @@ export const ProjectManagement = () => {
           Cancelled: "error",
         };
         return <Tag color={colorMap[status] || "default"}>{status}</Tag>;
+      },
+    },
+    {
+      title: "Thành viên dự án",
+      dataIndex: "project_member",
+      key: "project_member",
+      editable: false,
+      width: 150,
+      render: (_: any, record: IProject) => {
+        // Tìm project khớp với project_id của task hiện tại
+        const currentProject = projectDetail?.find(
+          (project: IProject) => project.id === record.id,
+        );
+
+        // Thêm return và key prop
+        return currentProject?.project_member?.map((member, index) => (
+          <Tag
+            color="blue"
+            style={{ marginRight: "4px" }}
+            key={member.employee_id || index}
+          >
+            {member.full_name}
+          </Tag>
+        ));
       },
     },
     {
